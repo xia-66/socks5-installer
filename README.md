@@ -15,7 +15,7 @@
 ## ⚡ 一键安装
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/你的用户名/socks5-installer/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/xia-66/socks5-installer/main/install.sh)
 ```
 
 ---
