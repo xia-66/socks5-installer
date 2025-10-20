@@ -1,11 +1,3 @@
-## 🤖 Assistant
-
-好的，已经为您更新。
-
-新的 `README.md` 文档将重点突出您提供的一键安装命令，并简化了使用说明，使其更加直接和清晰。
-
----
-
 # SOCKS5 Proxy Auto-Install Script (based on gost)
 
 这是一个用于在 Linux 服务器上一键安装、卸载和管理 SOCKS5 代理服务的 Shell 脚本。该脚本基于强大的开源代理工具 [gost](https://github.com/ginuerzh/gost) 实现，并使用 `systemd`进行服务管理。
