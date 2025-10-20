@@ -14,7 +14,7 @@ YELLOW='\033[0;33m'
 PLAIN='\033[0m'
 
 # 定义脚本变量
-GOST_VERSION="2.11.5"
+GOST_VERSION="2.12.0"
 GOST_INSTALL_PATH="/usr/local/bin"
 GOST_SERVICE_FILE="/etc/systemd/system/gost.service"
 GOST_CONFIG_DIR="/etc/gost"
