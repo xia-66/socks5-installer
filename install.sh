@@ -97,7 +97,8 @@ install_gost() {
 
     # 下载并安装 gost
     ARCH=$(get_arch)
-    FILENAME="gost_${GOST_VERSION}_linux_${ARCH}.tar.gz"
+    # --- [!] 修改点: 修正了文件名的格式 ---
+    FILENAME="gost-linux-${ARCH}-${GOST_VERSION}.tgz"
     
     # 定义多个下载源
     DOWNLOAD_URLS=(
@@ -112,9 +113,11 @@ install_gost() {
     download_success=false
     for url in "${DOWNLOAD_URLS[@]}"; do
         echo -e "${YELLOW}[尝试] ${url}${PLAIN}"
-        if curl -sL --connect-timeout 15 --max-time 120 "$url" -o "/tmp/gost.tar.gz"; then
+        # --- [!] 修改点: 临时文件名改为 .tgz ---
+        if curl -sL --connect-timeout 15 --max-time 120 "$url" -o "/tmp/gost.tgz"; then
             # 验证文件
-            if tar -tzf "/tmp/gost.tar.gz" &>/dev/null; then
+            # --- [!] 修改点: 验证 .tgz 文件 ---
+            if tar -tzf "/tmp/gost.tgz" &>/dev/null; then
                 echo -e "${GREEN}✓ 下载成功！${PLAIN}"
                 download_success=true
                 break
@@ -124,7 +127,7 @@ install_gost() {
         else
             echo -e "${YELLOW}✗ 下载失败，尝试下一个源...${PLAIN}"
         fi
-        rm -f "/tmp/gost.tar.gz"
+        rm -f "/tmp/gost.tgz"
     done
 
     if [ "$download_success" = false ]; then
@@ -139,15 +142,18 @@ install_gost() {
     fi
 
     echo -e "${YELLOW}正在解压并安装...${PLAIN}"
-    tar -zxf "/tmp/gost.tar.gz" -C "/tmp/"
+    # --- [!] 修改点: 解压 .tgz 文件 ---
+    tar -zxf "/tmp/gost.tgz" -C "/tmp/"
     
-    # v2.12.0 解压后直接是 gost 可执行文件
-    if [ ! -f "/tmp/gost" ]; then
+    # --- [!] 修改点: v2.12.0 解压后文件位于一个目录中 ---
+    EXTRACTED_DIR="/tmp/gost-linux-${ARCH}-${GOST_VERSION}"
+    if [ ! -f "${EXTRACTED_DIR}/gost" ]; then
         echo -e "${RED}错误: 解压后未找到 gost 可执行文件！${PLAIN}"
+        rm -rf /tmp/gost*
         exit 1
     fi
     
-    mv "/tmp/gost" "${GOST_INSTALL_PATH}/gost"
+    mv "${EXTRACTED_DIR}/gost" "${GOST_INSTALL_PATH}/gost"
     chmod +x "${GOST_INSTALL_PATH}/gost"
 
     # 清理临时文件
@@ -208,7 +214,7 @@ EOF
     # 显示安装结果
     sleep 2
     if systemctl is-active --quiet gost; then
-        local server_ip=$(curl -s --max-time 5 ip.sb 2>/dev/null || echo "YOUR_SERVER_IP")
+        local server_ip=$(curl -s --max-time 5 ip.sb 2>/dev/null || curl -s --max-time 5 ip.me 2>/dev/null || echo "YOUR_SERVER_IP")
         
         echo -e "${GREEN}=================================================${PLAIN}"
         echo -e "${GREEN}       SOCKS5 代理安装成功！${PLAIN}"
@@ -278,7 +284,12 @@ check_status() {
     
     if [ -f "$GOST_CONFIG_FILE" ]; then
         echo -e "\n${YELLOW}===== 配置信息 =====${PLAIN}"
-        cat "$GOST_CONFIG_FILE"
+        # 使用 jq 美化输出 (如果已安装)
+        if command -v jq &> /dev/null; then
+            jq . "$GOST_CONFIG_FILE"
+        else
+            cat "$GOST_CONFIG_FILE"
+        fi
     fi
 }
 
@@ -326,3 +337,4 @@ main() {
 }
 
 main
+
