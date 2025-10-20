@@ -96,7 +96,7 @@ install_gost() {
 
     # 下载并安装 gost
     ARCH=$(get_arch)
-    DOWNLOAD_URL="https://github.com/ginuerzh/gost/releases/download/v${GOST_VERSION}/gost-linux-${ARCH}-${GOST_VERSION}.tar.gz"
+    DOWNLOAD_URL="https://github.com/ginuerzh/gost/releases/download/v${GOST_VERSION}/gost_linux-${ARCH}-${GOST_VERSION}.tar.gz"
 
     echo -e "${YELLOW}正在从 GitHub 下载 gost v${GOST_VERSION} for ${ARCH}...${PLAIN}"
     curl -sL "$DOWNLOAD_URL" -o "/tmp/gost.tar.gz"
