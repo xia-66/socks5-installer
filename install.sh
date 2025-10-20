@@ -3,8 +3,7 @@
 #================================================================
 #	脚本名称: SOCKS5 一键安装/卸载脚本 (基于gost)
 #	系统支持: CentOS 7+, Debian 8+, Ubuntu 16+
-#	作者:       Your Name
-#	项目地址:   https://github.com/ginuerzh/gost
+#	项目地址: https://github.com/ginuerzh/gost
 #================================================================
 
 # 定义颜色
@@ -86,28 +85,69 @@ install_gost() {
     read -p "请输入 SOCKS5 代理的用户名 (留空则不设置认证): " SOCKS5_USER
     
     if [ -n "$SOCKS5_USER" ]; then
-        read -p "请输入 SOCKS5 代理的密码: " SOCKS5_PASS
+        read -sp "请输入 SOCKS5 代理的密码: " SOCKS5_PASS
+        echo
         while [ -z "$SOCKS5_PASS" ]; do
             echo -e "${RED}密码不能为空！${PLAIN}"
-            read -p "请重新输入 SOCKS5 代理的密码: " SOCKS5_PASS
+            read -sp "请重新输入 SOCKS5 代理的密码: " SOCKS5_PASS
+            echo
         done
         AUTH_INFO="${SOCKS5_USER}:${SOCKS5_PASS}"
     fi
 
     # 下载并安装 gost
     ARCH=$(get_arch)
-    DOWNLOAD_URL="https://github.com/ginuerzh/gost/releases/download/v${GOST_VERSION}/gost_linux-${ARCH}-${GOST_VERSION}.tar.gz"
+    FILENAME="gost_${GOST_VERSION}_linux_${ARCH}.tar.gz"
+    
+    # 定义多个下载源
+    DOWNLOAD_URLS=(
+        "https://github.com/ginuerzh/gost/releases/download/v${GOST_VERSION}/${FILENAME}"
+        "https://ghproxy.com/https://github.com/ginuerzh/gost/releases/download/v${GOST_VERSION}/${FILENAME}"
+        "https://mirror.ghproxy.com/https://github.com/ginuerzh/gost/releases/download/v${GOST_VERSION}/${FILENAME}"
+    )
 
-    echo -e "${YELLOW}正在从 GitHub 下载 gost v${GOST_VERSION} for ${ARCH}...${PLAIN}"
-    curl -sL "$DOWNLOAD_URL" -o "/tmp/gost.tar.gz"
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}下载失败！请检查网络或 GitHub Release 链接。${PLAIN}"
+    echo -e "${YELLOW}正在下载 gost v${GOST_VERSION} for ${ARCH}...${PLAIN}"
+
+    # 尝试所有下载源
+    download_success=false
+    for url in "${DOWNLOAD_URLS[@]}"; do
+        echo -e "${YELLOW}[尝试] ${url}${PLAIN}"
+        if curl -sL --connect-timeout 15 --max-time 120 "$url" -o "/tmp/gost.tar.gz"; then
+            # 验证文件
+            if tar -tzf "/tmp/gost.tar.gz" &>/dev/null; then
+                echo -e "${GREEN}✓ 下载成功！${PLAIN}"
+                download_success=true
+                break
+            else
+                echo -e "${YELLOW}✗ 文件损坏，尝试下一个源...${PLAIN}"
+            fi
+        else
+            echo -e "${YELLOW}✗ 下载失败，尝试下一个源...${PLAIN}"
+        fi
+        rm -f "/tmp/gost.tar.gz"
+    done
+
+    if [ "$download_success" = false ]; then
+        echo -e "${RED}所有下载源均失败！${PLAIN}"
+        echo -e "${YELLOW}请检查：${PLAIN}"
+        echo "  1. 网络连接是否正常"
+        echo "  2. 能否访问 GitHub"
+        echo "  3. DNS 设置是否正确"
+        echo -e "\n${YELLOW}手动下载地址:${PLAIN}"
+        echo "  https://github.com/ginuerzh/gost/releases/tag/v${GOST_VERSION}"
         exit 1
     fi
 
     echo -e "${YELLOW}正在解压并安装...${PLAIN}"
     tar -zxf "/tmp/gost.tar.gz" -C "/tmp/"
-    mv "/tmp/gost-linux-${ARCH}/gost" "${GOST_INSTALL_PATH}/gost"
+    
+    # v2.12.0 解压后直接是 gost 可执行文件
+    if [ ! -f "/tmp/gost" ]; then
+        echo -e "${RED}错误: 解压后未找到 gost 可执行文件！${PLAIN}"
+        exit 1
+    fi
+    
+    mv "/tmp/gost" "${GOST_INSTALL_PATH}/gost"
     chmod +x "${GOST_INSTALL_PATH}/gost"
 
     # 清理临时文件
@@ -140,8 +180,13 @@ EOF
 
     # 保存配置信息
     mkdir -p "$GOST_CONFIG_DIR"
-    echo "{\"port\": \"${SOCKS5_PORT}\", \"user\": \"${SOCKS5_USER}\", \"pass\": \"${SOCKS5_PASS}\"}" > "$GOST_CONFIG_FILE"
-
+    cat > "$GOST_CONFIG_FILE" <<EOF
+{
+  "port": "${SOCKS5_PORT}",
+  "user": "${SOCKS5_USER}",
+  "version": "${GOST_VERSION}"
+}
+EOF
 
     # 启动服务
     echo -e "${YELLOW}正在启动并设置开机自启...${PLAIN}"
@@ -151,32 +196,36 @@ EOF
 
     # 配置防火墙
     echo -e "${YELLOW}正在配置防火墙...${PLAIN}"
-    if command -v firewall-cmd &> /dev/null; then
-        firewall-cmd --zone=public --add-port=${SOCKS5_PORT}/tcp --permanent
-        firewall-cmd --reload
+    if command -v firewall-cmd &> /dev/null && systemctl is-active --quiet firewalld; then
+        firewall-cmd --zone=public --add-port=${SOCKS5_PORT}/tcp --permanent &>/dev/null
+        firewall-cmd --reload &>/dev/null
     elif command -v ufw &> /dev/null; then
-        ufw allow ${SOCKS5_PORT}/tcp
-        ufw reload
+        ufw allow ${SOCKS5_PORT}/tcp &>/dev/null
     else
-        echo -e "${YELLOW}警告: 未检测到 firewalld 或 ufw，请手动开放端口 ${SOCKS5_PORT}。${PLAIN}"
+        echo -e "${YELLOW}警告: 未检测到防火墙，请手动开放端口 ${SOCKS5_PORT}。${PLAIN}"
     fi
 
     # 显示安装结果
     sleep 2
     if systemctl is-active --quiet gost; then
-        echo -e "${GREEN}===== SOCKS5 代理安装成功！=====${PLAIN}"
-        echo -e "地址:   $(curl -s ip.sb)"
-        echo -e "端口:   ${GREEN}${SOCKS5_PORT}${PLAIN}"
+        local server_ip=$(curl -s --max-time 5 ip.sb 2>/dev/null || echo "YOUR_SERVER_IP")
+        
+        echo -e "${GREEN}=================================================${PLAIN}"
+        echo -e "${GREEN}       SOCKS5 代理安装成功！${PLAIN}"
+        echo -e "${GREEN}=================================================${PLAIN}"
+        echo -e "服务器地址: ${GREEN}${server_ip}${PLAIN}"
+        echo -e "端口:       ${GREEN}${SOCKS5_PORT}${PLAIN}"
         if [ -n "$SOCKS5_USER" ]; then
-            echo -e "用户名: ${GREEN}${SOCKS5_USER}${PLAIN}"
-            echo -e "密码:   ${GREEN}${SOCKS5_PASS}${PLAIN}"
+            echo -e "用户名:     ${GREEN}${SOCKS5_USER}${PLAIN}"
+            echo -e "密码:       ${GREEN}${SOCKS5_PASS}${PLAIN}"
         else
-            echo -e "认证:   ${YELLOW}未设置${PLAIN}"
+            echo -e "认证:       ${YELLOW}未设置${PLAIN}"
         fi
-        echo -e "\n${YELLOW}请在客户端中使用以上信息进行连接。${PLAIN}"
+        echo -e "${GREEN}=================================================${PLAIN}"
+        echo -e "${YELLOW}请在客户端中使用以上信息进行连接。${PLAIN}"
     else
         echo -e "${RED}安装失败！请查看服务状态以获取更多信息:${PLAIN}"
-        echo -e "journalctl -u gost -n 20"
+        echo -e "  journalctl -u gost -n 20"
     fi
 }
 
@@ -184,10 +233,13 @@ EOF
 uninstall_gost() {
     if [ ! -f "$GOST_SERVICE_FILE" ]; then
         echo -e "${RED}错误: 未检测到 gost 安装。${PLAIN}"
-        exit 1
+        return 1
     fi
 
     echo -e "${YELLOW}===== 开始卸载 SOCKS5 代理 =====${PLAIN}"
+
+    # 读取端口信息
+    SOCKS5_PORT=$(grep -oP '"port":\s*"\K[^"]+' "$GOST_CONFIG_FILE" 2>/dev/null)
 
     # 停止并禁用服务
     systemctl stop gost
@@ -201,15 +253,13 @@ uninstall_gost() {
     systemctl daemon-reload
 
     # 关闭防火墙端口
-    SOCKS5_PORT=$(grep -oP '"port":\s*"\K[^"]+' "$GOST_CONFIG_FILE" 2>/dev/null)
     if [ -n "$SOCKS5_PORT" ]; then
         echo -e "${YELLOW}正在关闭防火墙端口 ${SOCKS5_PORT}...${PLAIN}"
-        if command -v firewall-cmd &> /dev/null; then
-            firewall-cmd --zone=public --remove-port=${SOCKS5_PORT}/tcp --permanent
-            firewall-cmd --reload
+        if command -v firewall-cmd &> /dev/null && systemctl is-active --quiet firewalld; then
+            firewall-cmd --zone=public --remove-port=${SOCKS5_PORT}/tcp --permanent &>/dev/null
+            firewall-cmd --reload &>/dev/null
         elif command -v ufw &> /dev/null; then
-            ufw delete allow ${SOCKS5_PORT}/tcp
-            ufw reload
+            ufw delete allow ${SOCKS5_PORT}/tcp &>/dev/null
         fi
     fi
 
@@ -220,16 +270,23 @@ uninstall_gost() {
 check_status() {
     if [ ! -f "$GOST_SERVICE_FILE" ]; then
         echo -e "${RED}错误: 未检测到 gost 安装。${PLAIN}"
-        exit 1
+        return 1
     fi
+    
+    echo -e "${YELLOW}===== 服务状态 =====${PLAIN}"
     systemctl status gost --no-pager -l
+    
+    if [ -f "$GOST_CONFIG_FILE" ]; then
+        echo -e "\n${YELLOW}===== 配置信息 =====${PLAIN}"
+        cat "$GOST_CONFIG_FILE"
+    fi
 }
 
 # 显示主菜单
 show_menu() {
     clear
     echo "=================================================="
-    echo " SOCKS5 一键安装/卸载脚本 (基于 gost)"
+    echo " SOCKS5 一键安装/卸载脚本 (基于 gost v${GOST_VERSION})"
     echo "=================================================="
     echo -e " ${GREEN}1. 安装 SOCKS5 代理${PLAIN}"
     echo -e " ${RED}2. 卸载 SOCKS5 代理${PLAIN}"
@@ -269,4 +326,3 @@ main() {
 }
 
 main
-
