@@ -97,8 +97,8 @@ install_gost() {
 
     # 下载并安装 gost
     ARCH=$(get_arch)
-    # --- [!] 修改点: 修正了文件名的格式 ---
-    FILENAME="gost-linux-${ARCH}-${GOST_VERSION}.tgz"
+    # --- [!] 核心修正点: 恢复为原始脚本中正确的文件名格式 ---
+    FILENAME="gost_${GOST_VERSION}_linux_${ARCH}.tar.gz"
     
     # 定义多个下载源
     DOWNLOAD_URLS=(
@@ -113,11 +113,10 @@ install_gost() {
     download_success=false
     for url in "${DOWNLOAD_URLS[@]}"; do
         echo -e "${YELLOW}[尝试] ${url}${PLAIN}"
-        # --- [!] 修改点: 临时文件名改为 .tgz ---
-        if curl -sL --connect-timeout 15 --max-time 120 "$url" -o "/tmp/gost.tgz"; then
+        # --- [!] 核心修正点: 临时文件名改回 .tar.gz ---
+        if curl -sL --connect-timeout 15 --max-time 120 "$url" -o "/tmp/gost.tar.gz"; then
             # 验证文件
-            # --- [!] 修改点: 验证 .tgz 文件 ---
-            if tar -tzf "/tmp/gost.tgz" &>/dev/null; then
+            if tar -tzf "/tmp/gost.tar.gz" &>/dev/null; then
                 echo -e "${GREEN}✓ 下载成功！${PLAIN}"
                 download_success=true
                 break
@@ -127,7 +126,7 @@ install_gost() {
         else
             echo -e "${YELLOW}✗ 下载失败，尝试下一个源...${PLAIN}"
         fi
-        rm -f "/tmp/gost.tgz"
+        rm -f "/tmp/gost.tar.gz"
     done
 
     if [ "$download_success" = false ]; then
@@ -142,18 +141,16 @@ install_gost() {
     fi
 
     echo -e "${YELLOW}正在解压并安装...${PLAIN}"
-    # --- [!] 修改点: 解压 .tgz 文件 ---
-    tar -zxf "/tmp/gost.tgz" -C "/tmp/"
+    tar -zxf "/tmp/gost.tar.gz" -C "/tmp/"
     
-    # --- [!] 修改点: v2.12.0 解压后文件位于一个目录中 ---
-    EXTRACTED_DIR="/tmp/gost-linux-${ARCH}-${GOST_VERSION}"
-    if [ ! -f "${EXTRACTED_DIR}/gost" ]; then
+    # --- [!] 核心修正点: 恢复原始逻辑，v2.12.0 解压后直接是 gost 可执行文件 ---
+    if [ ! -f "/tmp/gost" ]; then
         echo -e "${RED}错误: 解压后未找到 gost 可执行文件！${PLAIN}"
         rm -rf /tmp/gost*
         exit 1
     fi
     
-    mv "${EXTRACTED_DIR}/gost" "${GOST_INSTALL_PATH}/gost"
+    mv "/tmp/gost" "${GOST_INSTALL_PATH}/gost"
     chmod +x "${GOST_INSTALL_PATH}/gost"
 
     # 清理临时文件
@@ -337,4 +334,3 @@ main() {
 }
 
 main
-
